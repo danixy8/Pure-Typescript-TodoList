@@ -1,96 +1,224 @@
 
-let todoList: string[] = [];
+class TodoItem {
+    private readonly _creationTimestamp: number;
+    private readonly _identifier: string;
 
-console.log(todoList);
+    constructor(private _description: string, identifier?: string){
+        this._creationTimestamp = new Date().getTime();
 
-const todoInput: HTMLInputElement = document.getElementById('todoInput') as HTMLInputElement;
-
-    function addTodo(): void {
-        if(todoInput === null){
-            console.error('The todo input is missing from the page!');
-            return
-        }
-
-        const newTodo: string = todoInput.value;
-
-        if ('' !== newTodo.trim()){
-            console.log('Adding todo: ', newTodo);
-
-            todoList.push(newTodo);
-            console.log('New todo list: ', todoList);
-
-            todoInput.value = '';
-            
-            todoList.sort();
-
-            updateTodoList();
-
-            filterTodoList();
+        if(identifier){
+            this._identifier = identifier;
+        }else {
+            this._identifier = Math.random().toString(36).substr(2,9);
         }
     }
 
-const todoListDiv: HTMLDivElement = document.getElementById('todoListContainer') as HTMLDivElement;
- 
-    function updateTodoList(): void {
-        console.log('updating the rendered todo list');
-        todoListDiv.innerHTML = '';
-        todoListDiv.textContent = '';
-    
+    get creationTimestamp(): number{
+        return this._creationTimestamp
+    }
+
+    get identifier(): string{
+        return this._identifier
+    }
+
+    get description(): string{
+        return this._description
+    }
+}
+
+class TodoList {
+    private _todoList: ReadonlyArray<TodoItem> = [];
+
+    constructor(todoList?: TodoItem[]){
+        if (Array.isArray(todoList) && todoList.length){
+            this._todoList = this._todoList.concat(todoList);
+        }
+    }
+
+    get todoList(): ReadonlyArray<TodoItem>{
+        return this._todoList
+    }
+
+    addTodo(todoItem: TodoItem){
+        if(todoItem){
+            this._todoList = this._todoList.concat(todoItem);
+        }
+    }
+
+    removeTodo(itemId: string){
+        if(itemId){
+            this._todoList = this.todoList.filter(item => {
+                if(item.identifier === itemId) {
+                    return false;
+                }else{
+                    return true;
+                }
+            })
+        }
+    }
+}
+
+interface todoListView {
+    render(todoList: ReadonlyArray<TodoItem>): void;
+    getInput(): TodoItem;
+    getFilter(): string;
+    clearInput(): void;
+    filter(): void;
+}
+
+class HTMLTodoListView implements todoListView{
+
+    private readonly todoInput: HTMLInputElement;
+    private readonly todoListDiv: HTMLDivElement;
+    private readonly todoListFilter: HTMLInputElement;
+
+    constructor(){
+        this.todoInput = document.getElementById('todoInput') as HTMLInputElement;
+        this.todoListDiv = document.getElementById('todoListContainer') as HTMLDivElement;
+        this.todoListFilter = document.getElementById('todoFilter') as HTMLInputElement;
+
+        if(!this.todoInput){
+            throw new Error("Could not find the todoInput HTML input element. Is the HTML correct?")
+        }
+
+        if(!this.todoListDiv){
+            throw new Error("Could not find the todoListDiv HTML input element. Is the HTML correct?")
+        }
+
+        if(!this.todoListFilter){
+            throw new Error("Could not find the todoFilter HTML input element. Is the HTML correct?")
+        }
+    }
+
+    clearInput(): void {
+        this.todoInput.value = ''
+    }
+
+    getFilter(): string{
+        return this.todoListFilter.value.toUpperCase();
+    }
+
+    getInput(): TodoItem{
+        const todoInputValue: string = this.todoInput.value.trim();
+        const retVal: TodoItem = new TodoItem(todoInputValue);
+        return retVal
+    }
+
+    render(todoList: ReadonlyArray<TodoItem>):void{
+        console.log("Updating the rendered todo list");
+        this.todoListDiv.innerHTML = '';
+        this.todoListDiv.textContent = '';
+
         const ul = document.createElement('ul');
         ul.setAttribute('id', 'todoList');
-        todoListDiv.appendChild(ul);
+        this.todoListDiv.appendChild(ul);
 
         todoList.forEach(item => {
             const li = document.createElement('li');
             li.setAttribute('class', 'todo-list-item');
-            li.innerHTML = `<a href='#'
-            onclick='removeTodoListItem("${item}")'>${item}</a>`
-            ul.appendChild(li)
+            li.innerHTML = `<a href='#' 
+            onclick='todoIt.removeTodo("${item.identifier}")' 
+            >${item.description}</a>`;
+            ul.appendChild(li);
         })
- 
     }
 
-    function filterTodoList(): void {
-        console.log('Filtering the rendered todo list');
+    filter(): void {
+        console.log("Filtering the rendered todo list");
+        const todoListHTML: HTMLUListElement = 
+        document.getElementById('todoList') as HTMLUListElement
 
-        const todoListHtml: HTMLUListElement = 
-        document.getElementById('todoList') as HTMLUListElement;
-
-        if (todoListHtml === null) {
+        if (todoListHTML == null){
             console.log('Nothing to filter');
-            return;
+            return
         }
 
-        const todoListFilter = document.getElementById('todoFilter') as HTMLInputElement;
-        const todoListFilterText = todoListFilter.value.toUpperCase();
-
-        todoListHtml.childNodes.forEach((item) => {
+        const todoListFilterText = this.getFilter();
+        todoListHTML.childNodes.forEach((item) => {
             let itemText: string | null = item.textContent;
-            if (itemText !== null) {
+            if (itemText != null){
                 itemText = itemText.toUpperCase();
 
                 if (itemText.startsWith(todoListFilterText)){
                     (item as HTMLLIElement).style.display = "list-item";
-                }else {
+                } else {
                     (item as HTMLLIElement).style.display = "none";
                 }
             }
         })
+    }
+}
 
+interface TodoListController {
+    addTodo(): void;
+    filterTodoList(): void;
+    removeTodo(identifier: string): void;
+}
+
+class TodoIt implements TodoListController {
+    private readonly _todoList : TodoList = new TodoList();
+
+    constructor (private _todoListView: todoListView){
+        console.log('TodoIt');
+
+        if (!_todoListView){
+            throw new Error ("The todo list view implementation is required to property initialize TodoIt")
+        }
     }
 
-   function removeTodoListItem(itemToRemove: string): void {
-        console.log("item to remove", itemToRemove);
+    addTodo(): void {
+        const newTodo = this._todoListView.getInput();
 
-        todoList = todoList.filter((value: string, _index, _array) =>{
-            if(value === itemToRemove){
-                return false;
-            }
-            return true;
-        })
+        if ('' !== newTodo.description){
+            console.log("Adding todo: ", newTodo);
 
-        updateTodoList();
+            this._todoList.addTodo(newTodo);
+            console.log("New todo list: ", this._todoList.todoList);
 
-        filterTodoList();
-   } 
+            this._todoListView.clearInput();
 
+            this._todoListView.render(this._todoList.todoList);
+
+            this.filterTodoList();
+        }
+    }
+
+    filterTodoList(): void {
+        this._todoListView.filter();
+        }
+    
+
+    removeTodo(identifier: string): void {
+        if(identifier){
+            console.log("item to remove: ", identifier);
+            this._todoList.removeTodo(identifier);
+            this._todoListView.render(this._todoList.todoList);
+            this.filterTodoList()
+        }
+    }
+}
+
+
+const view = new HTMLTodoListView();
+const todoIt = new TodoIt(view);
+
+
+class EventUtils {
+    static isEnter(event: KeyboardEvent): boolean{
+        let isEnterResult = false;
+
+        if(event !== undefined && event.defaultPrevented){
+            return false;
+        }
+
+        if (event == undefined) {
+            isEnterResult = false;
+        }else if (event.key !== undefined){
+            isEnterResult = event.key === 'Enter';
+        }else if (event.key !== undefined) {
+            isEnterResult = event.keyCode === 13;
+        }
+        
+        return isEnterResult;
+    }
+}
